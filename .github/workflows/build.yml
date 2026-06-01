@@ -1,0 +1,64 @@
+name: Build MCV APK
+on:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install React Native CLI
+        run: npm install -g react-native@0.73.4
+
+      - name: Create MCV Project
+        run: |
+          npx react-native init MCV --version 0.73.4 --skip-install
+          cd MCV
+          npm install --legacy-peer-deps \
+            @react-navigation/native \
+            @react-navigation/stack \
+            @react-navigation/bottom-tabs \
+            react-native-screens \
+            react-native-safe-area-context \
+            react-native-gesture-handler \
+            @react-native-async-storage/async-storage \
+            @react-native-voice/voice \
+            react-native-biometrics \
+            react-native-encrypted-storage \
+            react-native-linear-gradient \
+            react-native-reanimated \
+            fuse.js uuid
+
+      - name: Generate Keystore
+        run: |
+          keytool -genkeypair -v \
+            -keystore mcv-release.keystore \
+            -alias mcv_key \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass mcv_store_pass \
+            -keypass mcv_key_pass \
+            -dname "CN=MCV,O=MasterControlVoice,L=Coimbatore,ST=TamilNadu,C=IN"
+
+      - name: Build Release APK
+        run: |
+          cd MCV/android
+          ./gradlew assembleRelease \
+            -Pandroid.injected.signing.store.file=$GITHUB_WORKSPACE/mcv-release.keystore \
+            -Pandroid.injected.signing.store.password=mcv_store_pass \
+            -Pandroid.injected.signing.key.alias=mcv_key \
+            -Pandroid.injected.signing.key.password=mcv_key_pass
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v3
+        with:
+          name: MCV-release
+          path: MCV/android/app/build/outputs/apk/release/app-release.apk
