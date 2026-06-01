@@ -6,22 +6,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Setup Java
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
       - name: Setup Node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: '18'
 
-      - name: Install React Native CLI
-        run: npm install -g react-native@0.73.4
-
-      - name: Create MCV Project
+      - name: Install dependencies
         run: |
-          npx react-native init MCV --version 0.73.4 --skip-install
+          npm install -g react-native-cli
+          npx react-native@0.73.4 init MCV --skip-install
           cd MCV
           npm install --legacy-peer-deps \
             @react-navigation/native \
@@ -38,27 +36,66 @@ jobs:
             react-native-reanimated \
             fuse.js uuid
 
+      - name: Write App source
+        run: |
+          cd MCV
+          cat > index.js << 'SRCEOF'
+          import {AppRegistry} from 'react-native';
+          import App from './src/App';
+          import {name as appName} from './app.json';
+          AppRegistry.registerComponent(appName, () => App);
+          SRCEOF
+          mkdir -p src
+          cat > src/App.jsx << 'APPEOF'
+          import React,{useEffect,useState} from 'react';
+          import {StatusBar,View,Text,TextInput,TouchableOpacity,ScrollView,Modal,Alert,Linking} from 'react-native';
+          import {NavigationContainer} from '@react-navigation/native';
+          import {GestureHandlerRootView} from 'react-native-gesture-handler';
+          import {SafeAreaProvider} from 'react-native-safe-area-context';
+          import {createStackNavigator} from '@react-navigation/stack';
+          import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
+          import AsyncStorage from '@react-native-async-storage/async-storage';
+          const T={bg:'#050a12',surface:'#0b1420',card:'#0f1e30',border:'#1a3a5c',cyan:'#00e5ff',gold:'#ffd166',green:'#00ff9d',red:'#ff4060',text:'#c8dff0',muted:'#4a6880'};
+          const Stack=createStackNavigator();
+          const Tab=createBottomTabNavigator();
+          const CC=React.createContext({});
+          function Splash({navigation}){useEffect(()=>{setTimeout(async()=>{const u=await AsyncStorage.getItem('mcv_user');navigation.replace(u?'Auth':'Onboarding');},2200);},[]);return(<View style={{flex:1,backgroundColor:T.bg,alignItems:'center',justifyContent:'center'}}><Text style={{fontSize:60,color:T.cyan,fontWeight:'700',letterSpacing:10}}>MCV</Text><Text style={{color:T.muted,letterSpacing:4,marginTop:8}}>MASTER CONTROL VOICE</Text></View>);}
+          function Onboarding({navigation}){return(<View style={{flex:1,backgroundColor:T.bg,alignItems:'center',justifyContent:'center',padding:32}}><Text style={{fontSize:40,color:T.cyan,fontWeight:'700',marginBottom:16}}>Welcome</Text><Text style={{color:T.text,textAlign:'center',lineHeight:26,fontSize:15,marginBottom:48}}>Control every app on your phone with just your voice.</Text><TouchableOpacity onPress={()=>navigation.replace('Create')} style={{backgroundColor:T.cyan,borderRadius:14,paddingVertical:16,paddingHorizontal:40}}><Text style={{color:'#050a12',fontWeight:'800',fontSize:16}}>Get Started</Text></TouchableOpacity></View>);}
+          function Create({navigation}){const [uid,setUid]=useState('');const [pw,setPw]=useState('');const go=async()=>{if(uid.length<4){Alert.alert('Error','User ID must be 4+ characters');return;}if(pw.length<8){Alert.alert('Error','Password must be 8+ characters');return;}await AsyncStorage.setItem('mcv_user',JSON.stringify({uid,pw}));navigation.replace('Auth');};return(<ScrollView style={{flex:1,backgroundColor:T.bg}} contentContainerStyle={{padding:28,paddingTop:60}}><Text style={{color:T.cyan,fontSize:26,fontWeight:'700',marginBottom:32,textAlign:'center'}}>Create Account</Text><Text style={{color:T.text,marginBottom:8}}>User ID</Text><TextInput value={uid} onChangeText={setUid} placeholder="e.g. dr_voice_2025" placeholderTextColor={T.muted} autoCapitalize="none" style={{backgroundColor:T.card,borderWidth:1,borderColor:T.border,borderRadius:10,padding:14,color:T.text,marginBottom:20}}/><Text style={{color:T.text,marginBottom:8}}>Password</Text><TextInput value={pw} onChangeText={setPw} secureTextEntry placeholder="Min 8 characters" placeholderTextColor={T.muted} style={{backgroundColor:T.card,borderWidth:1,borderColor:T.border,borderRadius:10,padding:14,color:T.text,marginBottom:32}}/><TouchableOpacity onPress={go} style={{backgroundColor:T.cyan,borderRadius:12,padding:16,alignItems:'center'}}><Text style={{color:'#050a12',fontWeight:'800',fontSize:16}}>Create Account</Text></TouchableOpacity></ScrollView>);}
+          function Auth({onAuth}){const [pw,setPw]=useState('');const [uid,setUid]=useState('');useEffect(()=>{AsyncStorage.getItem('mcv_user').then(u=>{if(u)setUid(JSON.parse(u).uid);});},[]);const verify=async()=>{const raw=await AsyncStorage.getItem('mcv_user');if(!raw)return;const u=JSON.parse(raw);if(pw===u.pw){onAuth(u);}else{Alert.alert('Wrong password','Try again.');setPw('');}};return(<View style={{flex:1,backgroundColor:T.bg,padding:28,justifyContent:'center',alignItems:'center'}}><View style={{width:80,height:80,borderRadius:40,borderWidth:2,borderColor:T.cyan,backgroundColor:T.cyan+'18',alignItems:'center',justifyContent:'center',marginBottom:16}}><Text style={{fontSize:32,color:T.cyan}}>O</Text></View><Text style={{color:T.cyan,fontSize:42,fontWeight:'700',letterSpacing:8,marginBottom:4}}>MCV</Text><Text style={{color:T.muted,marginBottom:32,fontSize:13}}>@{uid}</Text><TextInput value={pw} onChangeText={setPw} secureTextEntry placeholder="Password" placeholderTextColor={T.muted} style={{backgroundColor:T.card,borderWidth:1,borderColor:T.border,borderRadius:10,padding:14,color:T.text,width:'100%',marginBottom:20}}/><TouchableOpacity onPress={verify} style={{backgroundColor:T.cyan,borderRadius:12,padding:16,width:'100%',alignItems:'center'}}><Text style={{color:'#050a12',fontWeight:'800',fontSize:16}}>Unlock MCV</Text></TouchableOpacity></View>);}
+          function Dashboard(){const {setOv}=React.useContext(CC);const APPS=[{n:'YouTube',i:'Y',u:'vnd.youtube://'},{n:'Instagram',i:'I',u:'instagram://'},{n:'Spotify',i:'S',u:'spotify://'},{n:'WhatsApp',i:'W',u:'whatsapp://'},{n:'Chrome',i:'C',u:'googlechrome://'},{n:'Maps',i:'M',u:'geo:0,0'}];return(<ScrollView style={{flex:1,backgroundColor:T.bg}} contentContainerStyle={{padding:20,paddingBottom:120}}><Text style={{color:T.cyan,fontSize:22,fontWeight:'700',marginBottom:4}}>Command Center</Text><Text style={{color:T.muted,marginBottom:24,fontSize:13}}>Tap button or speak a command</Text><TouchableOpacity onPress={()=>setOv(true)} style={{backgroundColor:T.card,borderWidth:2,borderColor:T.cyan,borderRadius:18,padding:32,alignItems:'center',marginBottom:28}}><Text style={{color:T.cyan,fontWeight:'700',fontSize:40}}>MIC</Text><Text style={{color:T.cyan,fontWeight:'700',fontSize:16,marginTop:10,letterSpacing:3}}>TAP TO COMMAND</Text><Text style={{color:T.muted,fontSize:12,marginTop:6}}>or long-press your earphone</Text></TouchableOpacity><Text style={{color:T.muted,fontSize:11,letterSpacing:3,marginBottom:14}}>QUICK OPEN</Text><View style={{flexDirection:'row',flexWrap:'wrap',gap:10}}>{APPS.map(a=>(<TouchableOpacity key={a.n} onPress={()=>Linking.openURL(a.u).catch(()=>{})} style={{backgroundColor:T.card,borderWidth:1,borderColor:T.border,borderRadius:12,padding:14,alignItems:'center',width:'30%'}}><Text style={{color:T.cyan,fontSize:22,fontWeight:'700'}}>{a.i}</Text><Text style={{color:T.text,marginTop:6,fontSize:11,textAlign:'center'}}>{a.n}</Text></TouchableOpacity>))}</View></ScrollView>);}
+          function History(){const [h,setH]=useState([]);useEffect(()=>{AsyncStorage.getItem('mcv_hist').then(d=>d&&setH(JSON.parse(d)));},[]);return(<ScrollView style={{flex:1,backgroundColor:T.bg}} contentContainerStyle={{padding:20,paddingBottom:100}}><Text style={{color:T.cyan,fontSize:22,fontWeight:'700',marginBottom:20}}>Command History</Text>{h.length===0?<Text style={{color:T.muted,textAlign:'center',marginTop:60,fontSize:15}}>No commands yet</Text>:h.map((x,i)=>(<View key={i} style={{backgroundColor:T.card,borderRadius:10,padding:14,marginBottom:10,borderWidth:1,borderColor:T.border}}><Text style={{color:T.cyan,fontStyle:'italic',fontSize:14}}>{x.cmd}</Text><Text style={{color:T.muted,fontSize:11,marginTop:4}}>{x.app} {x.t}</Text></View>))}</ScrollView>);}
+          function Settings({onLogout}){return(<ScrollView style={{flex:1,backgroundColor:T.bg}} contentContainerStyle={{padding:20,paddingBottom:100}}><Text style={{color:T.cyan,fontSize:22,fontWeight:'700',marginBottom:24}}>Settings</Text><View style={{backgroundColor:T.card,borderRadius:12,borderWidth:1,borderColor:T.border,marginBottom:20}}>{[{l:'Voice Authentication',h:'Enable voiceprint login'},{l:'Bluetooth Trigger',h:'Long-press earphone activates MCV'},{l:'Accessibility Service',h:'Required for cross-app control'},{l:'Language',h:'Indian English'}].map((x,i)=>(<View key={i} style={{flexDirection:'row',padding:16,borderBottomWidth:1,borderBottomColor:T.border+'44',gap:12,alignItems:'center'}}><View style={{flex:1}}><Text style={{color:T.text,fontSize:14}}>{x.l}</Text><Text style={{color:T.muted,fontSize:11,marginTop:2}}>{x.h}</Text></View></View>))}</View><TouchableOpacity onPress={()=>Alert.alert('Log Out','Are you sure?',[{text:'Cancel',style:'cancel'},{text:'Log Out',style:'destructive',onPress:async()=>{await AsyncStorage.removeItem('mcv_user');onLogout();}}])} style={{borderWidth:1,borderColor:T.red+'44',borderRadius:12,padding:14,alignItems:'center'}}><Text style={{color:T.red}}>Log Out</Text></TouchableOpacity></ScrollView>);}
+          function Overlay({vis,onClose}){const [st,setSt]=useState('idle');const [tr,setTr]=useState('');const [res,setRes]=useState('');const AM={youtube:['youtube','yt','video'],spotify:['spotify','music','song','play'],instagram:['instagram','insta','ig'],whatsapp:['whatsapp','message','chat'],chrome:['chrome','google','search'],maps:['maps','navigate','direction']};const DL={youtube:'vnd.youtube://',spotify:'spotify://',instagram:'instagram://',whatsapp:'whatsapp://',chrome:'googlechrome://',maps:'geo:0,0'};const detect=t=>{const x=t.toLowerCase();for(const[a,ks]of Object.entries(AM)){if(ks.some(k=>x.includes(k)))return a;}return null;};const listen=async()=>{setSt('listening');setTr('');setRes('');try{const V=require('@react-native-voice/voice').default;V.onSpeechResults=async e=>{const heard=e.value?.[0]||'';setTr(heard);setSt('processing');V.destroy().catch(()=>{});const app=detect(heard);if(app){await Linking.openURL(DL[app]).catch(()=>{});const msg='Opened '+app;setRes(msg);const hist=await AsyncStorage.getItem('mcv_hist');const arr=hist?JSON.parse(hist):[];arr.unshift({cmd:heard,app,t:new Date().toLocaleTimeString()});await AsyncStorage.setItem('mcv_hist',JSON.stringify(arr.slice(0,50)));}else{setRes('App not found. Say the app name clearly.');}setSt('done');setTimeout(onClose,2200);};V.onSpeechError=()=>{setSt('error');setRes('Could not hear. Try again.');};await V.start('en-IN');}catch(e){setSt('error');setRes('Mic error: '+e.message);}};useEffect(()=>{if(vis)listen();return()=>{try{require('@react-native-voice/voice').default.destroy();}catch{}};},[vis]);const SC={idle:T.muted,listening:T.cyan,processing:T.gold,done:T.green,error:T.red};const SL={idle:'Ready',listening:'Listening',processing:'Processing',done:'Done',error:'Error'};return(<Modal visible={vis} transparent animationType="slide" onRequestClose={onClose}><View style={{flex:1,backgroundColor:'#00000088',justifyContent:'flex-end'}}><TouchableOpacity style={{flex:1}} onPress={onClose}/><View style={{backgroundColor:T.card,borderTopLeftRadius:24,borderTopRightRadius:24,padding:28,paddingBottom:40}}><Text style={{color:SC[st],fontSize:14,fontWeight:'700',letterSpacing:2,marginBottom:20}}>{SL[st]}</Text><View style={{backgroundColor:T.bg,borderRadius:12,padding:14,marginBottom:16,minHeight:64}}><Text style={{color:T.muted,fontSize:9,letterSpacing:3,marginBottom:6}}>HEARD</Text><Text style={{color:T.cyan,fontSize:18,fontStyle:'italic'}}>{tr||(st==='listening'?'speak now':'waiting')}</Text></View>{res?<Text style={{color:SC[st],fontSize:15,fontWeight:'600',textAlign:'center',marginBottom:16}}>{res}</Text>:null}{(st==='error'||st==='done')&&<TouchableOpacity onPress={st==='error'?listen:onClose} style={{backgroundColor:T.cyan+'22',borderWidth:1,borderColor:T.cyan+'44',borderRadius:12,padding:14,alignItems:'center'}}><Text style={{color:T.cyan,fontWeight:'700'}}>{st==='error'?'Try Again':'Close'}</Text></TouchableOpacity>}</View></View></Modal>);}
+          function FloatBtn({onPress}){return(<TouchableOpacity onPress={onPress} style={{position:'absolute',bottom:88,right:20,width:62,height:62,borderRadius:31,backgroundColor:T.cyan,alignItems:'center',justifyContent:'center',elevation:20,zIndex:9999}}><Text style={{fontSize:28,color:'#050a12',fontWeight:'700'}}>O</Text></TouchableOpacity>);}
+          function Main({onLogout}){const [ov,setOv]=useState(false);return(<CC.Provider value={{setOv}}><Tab.Navigator screenOptions={{headerShown:false,tabBarStyle:{backgroundColor:T.surface,borderTopColor:T.border,height:62,paddingBottom:8},tabBarActiveTintColor:T.cyan,tabBarInactiveTintColor:T.muted}}><Tab.Screen name="Command" options={{tabBarIcon:({color})=><Text style={{color,fontSize:20}}>O</Text>}}>{()=><Dashboard/>}</Tab.Screen><Tab.Screen name="History" options={{tabBarIcon:({color})=><Text style={{color,fontSize:20}}>H</Text>}}>{()=><History/>}</Tab.Screen><Tab.Screen name="Settings" options={{tabBarIcon:({color})=><Text style={{color,fontSize:20}}>S</Text>}}>{()=><Settings onLogout={onLogout}/>}</Tab.Screen></Tab.Navigator><FloatBtn onPress={()=>setOv(true)}/><Overlay vis={ov} onClose={()=>setOv(false)}/></CC.Provider>);}
+          export default function App(){const [auth,setAuth]=useState(false);const [ready,setReady]=useState(false);useEffect(()=>{AsyncStorage.getItem('mcv_user').then(()=>setReady(true));},[]);if(!ready)return(<View style={{flex:1,backgroundColor:T.bg,alignItems:'center',justifyContent:'center'}}><Text style={{color:T.cyan,fontSize:40,fontWeight:'700'}}>MCV</Text></View>);return(<GestureHandlerRootView style={{flex:1}}><SafeAreaProvider><StatusBar barStyle="light-content" backgroundColor={T.bg}/><NavigationContainer theme={{dark:true,colors:{primary:T.cyan,background:T.bg,card:T.surface,text:T.text,border:T.border,notification:T.cyan}}}>{auth?<Main onLogout={()=>setAuth(false)}/>:<Stack.Navigator screenOptions={{headerShown:false,cardStyle:{backgroundColor:T.bg}}}><Stack.Screen name="Splash" component={Splash}/><Stack.Screen name="Onboarding" component={Onboarding}/><Stack.Screen name="Create" component={Create}/><Stack.Screen name="Auth">{()=><Auth onAuth={()=>setAuth(true)}/>}</Stack.Screen></Stack.Navigator>}</NavigationContainer></SafeAreaProvider></GestureHandlerRootView>);}
+          APPEOF
+
       - name: Generate Keystore
         run: |
           keytool -genkeypair -v \
-            -keystore mcv-release.keystore \
+            -keystore $GITHUB_WORKSPACE/mcv-release.keystore \
             -alias mcv_key \
             -keyalg RSA -keysize 2048 -validity 10000 \
             -storepass mcv_store_pass \
             -keypass mcv_key_pass \
-            -dname "CN=MCV,O=MasterControlVoice,L=Coimbatore,ST=TamilNadu,C=IN"
+            -dname "CN=MCV,O=MCV,L=Coimbatore,ST=TamilNadu,C=IN"
 
-      - name: Build Release APK
+      - name: Build APK
         run: |
           cd MCV/android
+          chmod +x gradlew
           ./gradlew assembleRelease \
             -Pandroid.injected.signing.store.file=$GITHUB_WORKSPACE/mcv-release.keystore \
             -Pandroid.injected.signing.store.password=mcv_store_pass \
             -Pandroid.injected.signing.key.alias=mcv_key \
-            -Pandroid.injected.signing.key.password=mcv_key_pass
+            -Pandroid.injected.signing.key.password=mcv_key_pass \
+            --no-daemon
 
       - name: Upload APK
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: MCV-release
+          name: MCV-release-apk
           path: MCV/android/app/build/outputs/apk/release/app-release.apk
+          retention-days: 7
